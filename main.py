@@ -2,7 +2,6 @@ from esprima.visitor import NodeVisitor, Visited
 from esprima import parse
 from random import randint
 
-i = 0
 class JsVisitor(NodeVisitor):
     indentLevel = 0
     in_class = False
@@ -714,14 +713,7 @@ from js2py.host.jsfunctions import parseFloat, parseInt, isFinite, \
 #     transformed = JsVisitor().visit(parsed)
 #     t.write("\n".join(transformed).replace("\n\n", "\n"))
 
-with open("lunr.py", 'w') as t:
-    with open('lunr.js') as f:
-        prog = f.read()
-    parsed = parse(prog, {"comment": True})
-    transformed = JsVisitor().visit(parsed)
-    t.write("\n".join(transformed).replace("\n\n", "\n"))
-
-# prog ='''lunr.utils.warn = (function (global) {
+# prog ='''t.utils.warn = (function (global) {
 #   return function (message) {
 #     if (global.console && console.warn) {
 #       console.warn(message)
