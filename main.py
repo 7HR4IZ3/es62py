@@ -80,7 +80,8 @@ from js2py.host.jsfunctions import parseFloat, parseInt, isFinite, \
     # Functions
     def visit_FunctionDeclaration(self, node, param=None, direct=True):
         d = f'\n{self.getIndent()}@Js\n' if True else ''
-        head = f"{d}{self.getIndent()}{'async ' if node.isAsync else ''}def {self.visit(node.id)}"
+        name = self.visit(node.id) or "__anonymous_function__"
+        head = f"{d}{self.getIndent()}{'async ' if node.isAsync else ''}def {name}"
         params = f", ".join(self.visit(i) for i in ((param or []) + node.params))
         self.current_params = params
         head = head + f"({params}):\n"
@@ -411,6 +412,9 @@ from js2py.host.jsfunctions import parseFloat, parseInt, isFinite, \
         return body
 
     def visit_Property(self, node):
+        if node.type == "SpreadElement":
+            return self.visit_SpreadElement(self, node, isObject=True)
+
         key = self.visit(node.key)
 
         if node.key.type == "Identifier":
@@ -520,207 +524,118 @@ from js2py.host.jsfunctions import parseFloat, parseInt, isFinite, \
         self.dedent()
         return head + body
 
-# prog = r"async function ev(a, ...b) {}"
+    # TODO refactor import and export
+    def visit_ImportDeclaration(self, node):
+        result = []
+        assert node.source.type == "Literal"
+        for specifier in node.specifiers:
+            if specifier.type == "ImportDefaultSpecifier" or specifier.type == "ImportSpecifier":
+                assert specifier.local.type == "Identifier"
+                dst = specifier.local.name
+                src = node.source.value
+                if src.endswith(".js"):
+                    src = src[:-3]
+                src = src.replace("@", "__at__")
+                src = src.replace("-", "_")
+                if src.startswith("./"):
+                    src = "." + src[2:]
+                src = src.replace("/", ".")
+                if specifier.type == "ImportDefaultSpecifier":
+                    src += ".__default__"
+                elif specifier.type == "ImportSpecifier":
+                    assert specifier.imported.type == "Identifier"
+                    src += "." + specifier.imported.name
+                if src == dst:
+                    result += [f"import {dst}"]
+                elif src == f".{dst}":
+                    result += [f"from . import {dst}"]
+                else:
+                    result += [f"import {src} as {dst}"]
+                #result += f"
+            else:
+                return f"# FIXME: ImportDeclaration: node = " + str(node).replace("\n", "\n# ")
+                # import { encode } from '@jridgewell/sourcemap-codec';
+                #raise NotImplementedError("# FIXME:\n" + str(node))
+            #s = ", ".join(node.specifiers)
+            #return f"from {node.source.value} import {}"
+        #print(node, file=sys.stderr)
+        return "\n".join(result)
 
-# prog = "let a, b = function() {}, c = 2, c = 19"
+    # TODO refactor import and export
+    def visit_ExportDefaultDeclaration(self, node):
+        #return f"# FIXME: ExportDefaultDeclaration: node = " + str(node).replace("\n", "\n# ")
+        # export default SomeIdentifier;
+        body = ""
+        # export default function someFunction() {};
+        # TODO anonymous declarations:
+        # export default function () {};
+        # export default class SomeClass {};
+        if node.declaration.type != "Identifier":
+            body = self.visit(node.declaration) + "\n"
+        src = ""
+        if node.declaration.type == "FunctionDeclaration":
+            src = self.visit(node.declaration.id) or "__anonymous_function__"
+        elif node.declaration.type == "ClassDeclaration": # TODO verify
+            assert node.declaration.id.type == "Identifier"
+            src = node.declaration.id.name
+        else:
+            return f"# FIXME: ExportDefaultDeclaration: node = " + str(node).replace("\n", "\n# ")
+        foot = f"__default__ = {src}"
+        return body + foot
 
-# prog = "let [a, b] = [1, 2]"
+    # TODO refactor import and export
+    def visit_ExportNamedDeclaration(self, node):
+        if node.source:
+            # js: export { default as Bundle } from './Bundle.js';
+            # py: import .Bundle.__default__ as Bundle
+            # py: from . import Bundle.__default__ as Bundle
+            result = []
+            for specifier in node.specifiers:
+                assert specifier.type == "ExportSpecifier"
+                assert specifier.local.type == "Identifier"
+                assert specifier.exported.type == "Identifier"
+                src = node.source.value
+                if src.endswith(".js"):
+                    src = src[:-3]
+                # FIXME from . import foo
+                # FIXME from .bar import foo
+                if src.startswith("./"):
+                    src = "." + src[2:]
+                src = src.replace("/", ".")
+                if specifier.local.name == "default":
+                    src += ".__default__"
+                else:
+                    src += "." + specifier.local.name
+                dst = specifier.exported.name
+                result += [f"import {src} as {dst}"]
+            return "\n".join(result)
+        else:
+            # no source
+            # js: export { a as b };
+            result = []
+            for specifier in node.specifiers:
+                assert specifier.type == "ExportSpecifier"
+                assert specifier.local.type == "Identifier"
+                assert specifier.exported.type == "Identifier"
+                src = specifier.local.name
+                dst = specifier.exported.name
+                result += [f"{dst} = {src}"]
+            return "\n".join(result)
 
-# prog = "sayname(function() {})"
+        return f"# FIXME: ExportNamedDeclaration: node = " + str(node).replace("\n", "\n# ")
 
-# prog = r"if (true) {} else if (false) {} else {}"
+        #print(node, file=sys.stderr)
+        return f"# FIXME ExportNamedDeclaration {node}"
+        raise NotImplementedError
+        head = f"# FIXME ExportDefaultDeclaration\n"
+        body = self.visit(node.declaration)
+        return head + body
 
-# prog = r"""switch (ages) {
-#     case 17:
-#         let a = "Hello World";
-#     case 12, 89:
-#         ret += 12;
-#         ret ++;
-#     default:
-#         console.log('Hello World..', [1,2,4,5])
-# }"""
 
-# prog = """class Ages {
-# }"""
-
-# prog = """class Ages {
-#     method() {}
-# }"""
-
-# prog = """class Ages {
-#     constructor() {
-#         this.age = 7;
-#     }
-#     method() {}
-# }"""
-
-# prog = """for (let i = 0; i < 100; i++) {
-#     console.log(i)
-# }"""
-
-# prog = "do {} while (true)"
-
-# prog = "let name = age => {console.log(age)}"
-
-# prog = "if (true) console.log('Hiii') "
-
-# prog = "true ? console.log('Hiii') : log('Nope')"
-
-# prog = "let { x, y, ...z } = { x: 1, y: 2, a: 3, b: 4 };"
-
-# prog = "const x = (x, y) => { return x * y };"
-
-# prog = """
-# const q1 = ["Jan", "Feb", "Mar"];
-# const q2 = ["Apr", "May", "Jun"];
-# const q3 = ["Jul", "Aug", "Sep"];
-# const q4 = ["Oct", "Nov", "May"];
-
-# const year = [...q1, ...q2, ...q3, ...q4];
-# """
-
-# prog = '''const numbers = [23,55,21,87,56];
-# let maxValue = Math.max(...numbers);'''
-# prog = '''const fruits = new Map([
-# ["apples", 500],
-# ["bananas", 300],
-# ["oranges", 200]
-# ]);'''
-
-# prog = '''class Car {
-#   constructor(name, year) {
-#     this.name = name;
-#     this.year = year;
-#   }
-# }
-# const myCar1 = new Car("Ford", 2014);
-# const myCar2 = new Car("Audi", 2019);
-# '''
-
-# prog = '''
-# const myPromise = new Promise(function(myResolve, myReject) {
-# // "Producing Code" (May take some time)
-
-#   myResolve(); // when successful
-#   myReject();  // when error
-# });
-
-# // "Consuming Code" (Must wait for a fulfilled Promise).
-# myPromise.then(
-#   function(value) { /* code if successful */ },
-#   function(error) { /* code if some error */ }
-# );'''
-
-# prog = """function myFunction(x, y = 10) {
-#   // y is 10 if not passed or undefined
-#   return x + y;
-# }
-# myFunction(5); // will return 15"""
-
-# prog = '''function sum(...args) {
-#   let sum = 0;
-#   for (let arg of args) sum += arg;
-#   return sum;
-# }
-
-# let x = sum(4, 9, 16, 25, 29, 100, 66, 77);'''
-
-# Fix....  
-# prog = '''var customer = { name: "Foo" }
-# var card = { amount: 7, product: "Bar", unitprice: 42 }
-# var message = `Hello ${customer.name}, want to buy ${card.amount} ${card.product} for a total of ${card.amount * card.unitprice} bucks?`'''
-
-# prog = '''let target = {
-#     foo: "Welcome, foo"
-# }
-# let proxy = new Proxy(target, {
-#     get (receiver, name) {
-#         return name in receiver ? receiver[name] : `Hello, ${name}`
-#     }
-# })
-# proxy.foo === "Welcome, foo"
-# proxy.world === "Hello, world"'''
-
-# prog = '''
-# let Obj = {
-#     * foo () {}
-# }
-# class Clz {
-#     * bar () {}
-# }
-# '''
-
-# prog = '''
-# function* range (start, end, step) {
-#     while (start < end) {
-#         yield start
-#         start += step
-#     }
-# }
-
-# for (let i of range(0, 10, 2)) {
-#     console.log(i) // 0, 2, 4, 6, 8
-# }'''
-
-# prog = '''
-# class Rectangle extends Shape {
-#     static defaultRectangle () {
-#         return new Rectangle("default", 0, 0, 100, 100)
-#     }
-# }
-# class Circle extends Shape {
-#     static defaultCircle () {
-#         return new Circle("default", 0, 0, 100)
-#     }
-# }
-# var defRectangle = Rectangle.defaultRectangle()
-# var defCircle    = Circle.defaultCircle()
-# '''
-
-# prog = '''
-# let obj = {
-#     foo: "bar",
-#     [ "baz" + quux() ]: 42
-# }
-# '''
-
-# prog = '''
-# var x = 0, y = 0
-# obj = { x, y }
-# '''
-
-# prog = '''
-# obj = {
-#     foo (a, b) {
-#     },
-#     bar (x, y) {
-#     },
-#     *quux (x, y) {
-#     }
-# }
-# '''
-
-# prog = '''var list = [ 1, 2, 3 ];
-# var [ a, , b ] = list;
-# [ b, a ] = [ a, b ]'''
-
-# prog = """var { op, lhs, rhs } = getASTNode()"""
-
-# with open("react.py", 'w') as t:
-#     with open('react.bundle.js') as f:
-#         prog = f.read()
-#     parsed = parse(prog, {"comment": True})
-#     transformed = JsVisitor().visit(parsed)
-#     t.write("\n".join(transformed).replace("\n\n", "\n"))
-
-# prog ='''t.utils.warn = (function (global) {
-#   return function (message) {
-#     if (global.console && console.warn) {
-#       console.warn(message)
-#     }
-#   }
-# })(this)
-# '''
-# parsed = parse(prog, {"comment": True})
-# transformed = JsVisitor().visit(parsed)
-# print("\n".join(transformed))
+if __name__ == "__main__":
+    import sys
+    with open(sys.argv[1]) as f:
+        prog = f.read()
+        parsed = parse(prog, {"comment": True, "tolerant": True})
+        transformed = JsVisitor().visit(parsed)
+        print("\n".join(transformed))
