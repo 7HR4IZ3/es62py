@@ -546,6 +546,55 @@ from js2py.host.jsfunctions import parseFloat, parseInt, isFinite, \
         foot = f"__default__ = {src}"
         return body + foot
 
+    # TODO refactor import and export
+    def visit_ExportNamedDeclaration(self, node):
+        if node.source:
+            # js: export { default as Bundle } from './Bundle.js';
+            # py: import .Bundle.__default__ as Bundle
+            # py: from . import Bundle.__default__ as Bundle
+            result = []
+            for specifier in node.specifiers:
+                assert specifier.type == "ExportSpecifier"
+                assert specifier.local.type == "Identifier"
+                assert specifier.exported.type == "Identifier"
+                src = node.source.value
+                if src.endswith(".js"):
+                    src = src[:-3]
+                # FIXME from . import foo
+                # FIXME from .bar import foo
+                if src.startswith("./"):
+                    src = "." + src[2:]
+                src = src.replace("/", ".")
+                if specifier.local.name == "default":
+                    src += ".__default__"
+                else:
+                    src += "." + specifier.local.name
+                dst = specifier.exported.name
+                result += [f"import {src} as {dst}"]
+            return "\n".join(result)
+        else:
+            # no source
+            # js: export { a as b };
+            result = []
+            for specifier in node.specifiers:
+                assert specifier.type == "ExportSpecifier"
+                assert specifier.local.type == "Identifier"
+                assert specifier.exported.type == "Identifier"
+                src = specifier.local.name
+                dst = specifier.exported.name
+                result += [f"{dst} = {src}"]
+            return "\n".join(result)
+
+        return f"# FIXME: ExportNamedDeclaration: node = " + str(node).replace("\n", "\n# ")
+
+        #print(node, file=sys.stderr)
+        return f"# FIXME ExportNamedDeclaration {node}"
+        raise NotImplementedError
+        head = f"# FIXME ExportDefaultDeclaration\n"
+        body = self.visit(node.declaration)
+        return head + body
+
+
 # prog = r"async function ev(a, ...b) {}"
 
 # prog = "let a, b = function() {}, c = 2, c = 19"
