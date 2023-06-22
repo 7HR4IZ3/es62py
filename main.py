@@ -80,7 +80,8 @@ from js2py.host.jsfunctions import parseFloat, parseInt, isFinite, \
     # Functions
     def visit_FunctionDeclaration(self, node, param=None, direct=True):
         d = f'\n{self.getIndent()}@Js\n' if True else ''
-        head = f"{d}{self.getIndent()}{'async ' if node.isAsync else ''}def {self.visit(node.id)}"
+        name = self.visit(node.id) or "__anonymous_function__"
+        head = f"{d}{self.getIndent()}{'async ' if node.isAsync else ''}def {name}"
         params = f", ".join(self.visit(i) for i in ((param or []) + node.params))
         self.current_params = params
         head = head + f"({params}):\n"
@@ -522,6 +523,28 @@ from js2py.host.jsfunctions import parseFloat, parseInt, isFinite, \
         body = self.visit(node.body)
         self.dedent()
         return head + body
+
+    # TODO refactor import and export
+    def visit_ExportDefaultDeclaration(self, node):
+        #return f"# FIXME: ExportDefaultDeclaration: node = " + str(node).replace("\n", "\n# ")
+        # export default SomeIdentifier;
+        body = ""
+        # export default function someFunction() {};
+        # TODO anonymous declarations:
+        # export default function () {};
+        # export default class SomeClass {};
+        if node.declaration.type != "Identifier":
+            body = self.visit(node.declaration) + "\n"
+        src = ""
+        if node.declaration.type == "FunctionDeclaration":
+            src = self.visit(node.declaration.id) or "__anonymous_function__"
+        elif node.declaration.type == "ClassDeclaration": # TODO verify
+            assert node.declaration.id.type == "Identifier"
+            src = node.declaration.id.name
+        else:
+            return f"# FIXME: ExportDefaultDeclaration: node = " + str(node).replace("\n", "\n# ")
+        foot = f"__default__ = {src}"
+        return body + foot
 
 # prog = r"async function ev(a, ...b) {}"
 
