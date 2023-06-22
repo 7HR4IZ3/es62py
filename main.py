@@ -836,3 +836,11 @@ from js2py.host.jsfunctions import parseFloat, parseInt, isFinite, \
 # parsed = parse(prog, {"comment": True})
 # transformed = JsVisitor().visit(parsed)
 # print("\n".join(transformed))
+
+if __name__ == "__main__":
+    import sys
+    with open(sys.argv[1]) as f:
+        prog = f.read()
+        parsed = parse(prog, {"comment": True, "tolerant": True})
+        transformed = JsVisitor().visit(parsed)
+        print("\n".join(transformed))
