@@ -411,6 +411,9 @@ from js2py.host.jsfunctions import parseFloat, parseInt, isFinite, \
         return body
 
     def visit_Property(self, node):
+        if node.type == "SpreadElement":
+            return self.visit_SpreadElement(self, node, isObject=True)
+
         key = self.visit(node.key)
 
         if node.key.type == "Identifier":
