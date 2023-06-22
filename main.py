@@ -525,6 +525,43 @@ from js2py.host.jsfunctions import parseFloat, parseInt, isFinite, \
         return head + body
 
     # TODO refactor import and export
+    def visit_ImportDeclaration(self, node):
+        result = []
+        assert node.source.type == "Literal"
+        for specifier in node.specifiers:
+            if specifier.type == "ImportDefaultSpecifier" or specifier.type == "ImportSpecifier":
+                assert specifier.local.type == "Identifier"
+                dst = specifier.local.name
+                src = node.source.value
+                if src.endswith(".js"):
+                    src = src[:-3]
+                src = src.replace("@", "__at__")
+                src = src.replace("-", "_")
+                if src.startswith("./"):
+                    src = "." + src[2:]
+                src = src.replace("/", ".")
+                if specifier.type == "ImportDefaultSpecifier":
+                    src += ".__default__"
+                elif specifier.type == "ImportSpecifier":
+                    assert specifier.imported.type == "Identifier"
+                    src += "." + specifier.imported.name
+                if src == dst:
+                    result += [f"import {dst}"]
+                elif src == f".{dst}":
+                    result += [f"from . import {dst}"]
+                else:
+                    result += [f"import {src} as {dst}"]
+                #result += f"
+            else:
+                return f"# FIXME: ImportDeclaration: node = " + str(node).replace("\n", "\n# ")
+                # import { encode } from '@jridgewell/sourcemap-codec';
+                #raise NotImplementedError("# FIXME:\n" + str(node))
+            #s = ", ".join(node.specifiers)
+            #return f"from {node.source.value} import {}"
+        #print(node, file=sys.stderr)
+        return "\n".join(result)
+
+    # TODO refactor import and export
     def visit_ExportDefaultDeclaration(self, node):
         #return f"# FIXME: ExportDefaultDeclaration: node = " + str(node).replace("\n", "\n# ")
         # export default SomeIdentifier;
